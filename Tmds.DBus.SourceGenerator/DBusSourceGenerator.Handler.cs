@@ -57,6 +57,7 @@ namespace Tmds.DBus.SourceGenerator
             AddHandlerSignals(ref cl, dBusInterface);
             AddHandlerProperties(ref cl, ref switchStatement, dBusInterface);
             AddHandlerIntrospect(ref switchStatement, dBusInterface);
+            AddHandlerPeer(ref switchStatement, dBusInterface);
 
             if (dBusInterface.Properties?.Length > 0)
             {
@@ -588,7 +589,7 @@ namespace Tmds.DBus.SourceGenerator
 
             AddPropertiesClass(ref cl, dBusInterface);
         }
-
+        
         private void AddHandlerIntrospect(ref SwitchStatementSyntax sw, DBusInterface dBusInterface)
         {
             XmlSerializer xmlSerializer = new(typeof(DBusNode));
@@ -654,6 +655,59 @@ namespace Tmds.DBus.SourceGenerator
                         BreakStatement()));
         }
 
+        private void AddHandlerPeer(ref SwitchStatementSyntax sw, DBusInterface dBusInterface)
+        {
+             sw = sw.AddSections(
+                SwitchSection()
+                    .AddLabels(
+                        CaseSwitchLabel(MakeLiteralExpression("org.freedesktop.DBus.Peer")))
+                    .AddStatements(
+                        SwitchStatement(
+                            TupleExpression()
+                                .AddArguments(
+                                    Argument(MakeMemberAccessExpression("context", "Request", "MemberAsString")),
+                                    Argument(MakeMemberAccessExpression("context", "Request", "SignatureAsString"))))
+                            .AddSections(
+                                SwitchSection()
+                                    .AddLabels(
+                                        CasePatternSwitchLabel(
+                                            RecursivePattern()
+                                                .WithPositionalPatternClause(
+                                                    PositionalPatternClause()
+                                                        .AddSubpatterns(
+                                                            Subpattern(
+                                                                ConstantPattern(MakeLiteralExpression("Ping"))),
+                                                            Subpattern(
+                                                                BinaryPattern(SyntaxKind.OrPattern, ConstantPattern(MakeLiteralExpression(string.Empty)), ConstantPattern(LiteralExpression(SyntaxKind.NullLiteralExpression)))))),
+                                            Token(SyntaxKind.ColonToken)))
+                                    .AddStatements(
+                                        Block(
+                                            ExpressionStatement(
+                                                InvocationExpression(IdentifierName("Reply"))),
+                                            LocalFunctionStatement(PredefinedType(Token(SyntaxKind.VoidKeyword)), Identifier("Reply"))
+                                                .AddBodyStatements(
+                                                    LocalDeclarationStatement(
+                                                        VariableDeclaration(ParseTypeName("MessageWriter"))
+                                                            .AddVariables(
+                                                                VariableDeclarator("writer")
+                                                                    .WithInitializer(
+                                                                        EqualsValueClause(
+                                                                            InvocationExpression(
+                                                                                    MakeMemberAccessExpression("context", "CreateReplyWriter"))
+                                                                                .AddArgumentListArguments(
+                                                                                    Argument(
+                                                                                        PostfixUnaryExpression(SyntaxKind.SuppressNullableWarningExpression, LiteralExpression(SyntaxKind.NullLiteralExpression)))))))),
+                                                    ExpressionStatement(
+                                                        InvocationExpression(
+                                                                MakeMemberAccessExpression("context", "Reply"))
+                                                            .AddArgumentListArguments(
+                                                                Argument(
+                                                                    InvocationExpression(MakeMemberAccessExpression("writer", "CreateMessage")))))),
+                                            BreakStatement()))),
+                        BreakStatement()));
+        }
+
+        
         private void AddHandlerSignals(ref ClassDeclarationSyntax cl, DBusInterface dBusInterface)
         {
             if (dBusInterface.Signals is null)
